@@ -11,7 +11,7 @@ ENV APP_HOME=/app \
 WORKDIR ${APP_HOME}
 
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends build-essential && \
+    apt-get install -y --no-install-recommends build-essential default-libmysqlclient-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY Gemfile* ./

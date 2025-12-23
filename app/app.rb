@@ -3,6 +3,7 @@
 require "json"
 require "sinatra/base"
 require_relative "services/search_client"
+require_relative "services/database"
 
 class App < Sinatra::Base
   configure do
@@ -14,6 +15,10 @@ class App < Sinatra::Base
   helpers do
     def search_client
       @search_client ||= Services::SearchClient.build
+    end
+
+    def db
+      Services::Database.connection
     end
 
     def books_index
@@ -41,6 +46,13 @@ class App < Sinatra::Base
 
       @books_index_ready = true
     end
+
+    def ensure_books_table!
+      return if @books_table_ready
+
+      Services::Database.ensure_books_table!
+      @books_table_ready = true
+    end
   end
 
   get "/" do
@@ -59,6 +71,7 @@ class App < Sinatra::Base
 
   post "/books" do
     ensure_books_index!
+    ensure_books_table!
 
     payload = {
       title: params[:title].to_s.strip,
@@ -77,7 +90,9 @@ class App < Sinatra::Base
     payload.delete(:description) if payload[:description].empty?
 
     begin
-      search_client.index(index: books_index, body: payload)
+      now = Time.now
+      id = db[:books].insert(payload.merge(created_at: now, updated_at: now))
+      search_client.index(index: books_index, id: id, body: payload)
       redirect "/books/new?notice=登録しました"
     rescue StandardError => e
       status 500
@@ -87,13 +102,14 @@ class App < Sinatra::Base
 
   get "/books/search" do
     ensure_books_index!
+    ensure_books_table!
 
     query = params[:q].to_s.strip
     results = []
 
     if !query.empty?
       begin
-        response = search_client.search(
+        search_response = search_client.search(
           index: books_index,
           body: {
             query: {
@@ -105,15 +121,22 @@ class App < Sinatra::Base
           }
         )
 
-        results = response.fetch("hits", {}).fetch("hits", []).map do |hit|
-          source = hit["_source"]
+        hits = search_response.fetch("hits", {}).fetch("hits", [])
+        ids = hits.map { |h| h["_id"].to_i }.uniq
+        db_records = db[:books].where(id: ids).all.inject({}) { |acc, r| acc[r[:id]] = r; acc }
+
+        results = hits.filter_map do |hit|
+          id = hit["_id"].to_i
+          record = db_records[id]
+          next unless record
+
           {
-            id: hit["_id"],
+            id:,
             score: hit["_score"],
-            title: source["title"],
-            author: source["author"],
-            description: source["description"],
-            published_year: source["published_year"]
+            title: record[:title],
+            author: record[:author],
+            description: record[:description],
+            published_year: record[:published_year]
           }
         end
       rescue StandardError => e
@@ -129,6 +152,7 @@ class App < Sinatra::Base
   post "/api/books" do
     content_type :json
     ensure_books_index!
+    ensure_books_table!
 
     body = request.body.read
     payload = body.empty? ? {} : JSON.parse(body)
@@ -141,7 +165,16 @@ class App < Sinatra::Base
     end
 
     begin
-      search_client.index(index: books_index, body: payload)
+      now = Time.now
+      id = db[:books].insert(
+        title: title,
+        author: author,
+        description: payload["description"],
+        published_year: payload["published_year"],
+        created_at: now,
+        updated_at: now
+      )
+      search_client.index(index: books_index, id: id, body: payload)
       status 201
       { result: "created" }.to_json
     rescue StandardError => e
@@ -153,6 +186,7 @@ class App < Sinatra::Base
   get "/api/books/search" do
     content_type :json
     ensure_books_index!
+    ensure_books_table!
 
     query = params[:q].to_s.strip
     return { results: [] }.to_json if query.empty?
@@ -170,11 +204,19 @@ class App < Sinatra::Base
         }
       )
 
-      hits = response.fetch("hits", {}).fetch("hits", []).map do |hit|
-        hit["_source"].merge("_id" => hit["_id"], "_score" => hit["_score"])
+      hits = response.fetch("hits", {}).fetch("hits", [])
+      ids = hits.map { |h| h["_id"].to_i }.uniq
+      db_records = db[:books].where(id: ids).all.index_by { |r| r[:id] }
+
+      results = hits.filter_map do |hit|
+        id = hit["_id"].to_i
+        record = db_records[id]
+        next unless record
+
+        record.merge("_id" => id, "_score" => hit["_score"])
       end
 
-      { results: hits }.to_json
+      { results: results }.to_json
     rescue StandardError => e
       status 500
       { error: e.message }.to_json

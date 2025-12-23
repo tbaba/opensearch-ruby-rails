@@ -13,6 +13,8 @@ docker-compose up --build
 - ヘルスチェックは `http://localhost:4567/health`。`OPENSEARCH_URL` がレスポンスに含まれます。
 - `rerun` + ボリュームマウントで `app/` や `config/` の変更が即反映されます。
 - OpenSearch も同時に起動します（`public.ecr.aws/opensearchproject/opensearch:1.3.20`）。`http://localhost:9200` で確認できます。
+- MySQL も同時に起動します（`mysql:8.0`）。接続情報は `DB_HOST=mysql`, `DB_NAME=books`, `DB_USER=app`, `DB_PASSWORD=password` です。
+  - `docker/mysql-init.sql` でユーザー/DBを初期化しています。既存ボリュームがある場合は初期化が走らないので、必要に応じて `docker volume rm opensearch-ruby-rails_mysql-data` などでリセットしてください。
 
 ## 書籍登録/検索の使い方
 - UI
@@ -21,6 +23,7 @@ docker-compose up --build
 - API
   - 登録: `POST http://localhost:4567/api/books`（JSON で `title`, `author` 必須）
   - 検索: `GET  http://localhost:4567/api/books/search?q=キーワード`
+    - OpenSearch で検索し、得た ID をもとに MySQL からレコードを取得して返します（検索用と実データ保存を分離）。
 
 ## OpenSearch 連携の下準備
 - `app/services/search_client.rb` に接続用クライアントを用意しています（`OPENSEARCH_URL` を利用）。次のステップで実際の API 呼び出しを実装してください。
@@ -29,7 +32,9 @@ docker-compose up --build
 ## 主要ファイル
 - `app/app.rb` … Sinatra アプリ本体。
 - `app/services/search_client.rb` … OpenSearch クライアント生成用のプレースホルダー。
+- `app/services/database.rb` … MySQL 接続と `books` テーブル自動作成。
 - `config/puma.rb` … Rack サーバー設定（Puma）。
 - `config.ru` … Rack エントリーポイント。
 - `Dockerfile` / `docker-compose.yml` … 開発用コンテナ定義（ホットリロード対応）。`bundle` ボリュームは使わず、イメージビルド時の Bundler キャッシュを利用します。
 - `docker-compose.yml` の `opensearch` サービス … 開発用 OpenSearch 1.3.20（セキュリティ無効、データは `opensearch-data` ボリュームに永続化）。
+- `docker-compose.yml` の `mysql` サービス … 開発用 MySQL 8.0（データは `mysql-data` ボリュームに永続化）。

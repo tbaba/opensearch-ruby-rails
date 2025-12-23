@@ -24,6 +24,9 @@ docker-compose up --build
   - 登録: `POST http://localhost:4567/api/books`（JSON で `title`, `author` 必須）
   - 検索: `GET  http://localhost:4567/api/books/search?q=キーワード`
     - OpenSearch で検索し、得た ID をもとに MySQL からレコードを取得して返します（検索用と実データ保存を分離）。
+  - リセット: `POST http://localhost:4567/api/books/reset`
+    - MySQL をソースとして新規インデックスを作成し、エイリアスをスワップして無停止で OpenSearch をリビルドします。
+     - バッチサイズは `BOOKS_REINDEX_BATCH`（デフォルト 1000 件）で制御できます。大量レコード（例: 20 万件）でもメモリ使用を抑えて順次バルク投入します。
 
 ## OpenSearch 連携の下準備
 - `app/services/search_client.rb` に接続用クライアントを用意しています（`OPENSEARCH_URL` を利用）。次のステップで実際の API 呼び出しを実装してください。

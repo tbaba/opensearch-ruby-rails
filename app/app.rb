@@ -25,24 +25,42 @@ class App < Sinatra::Base
       ENV.fetch("BOOKS_INDEX", "books")
     end
 
+    def books_index_template
+      {
+        mappings: {
+          properties: {
+            title: { type: "text" },
+            author: { type: "text" },
+            description: { type: "text" },
+            published_year: { type: "integer" }
+          }
+        }
+      }
+    end
+
     def ensure_books_index!
       return if @books_index_ready
 
-      unless search_client.indices.exists?(index: books_index)
-        search_client.indices.create(
-          index: books_index,
-          body: {
-            mappings: {
-              properties: {
-                title: { type: "text" },
-                author: { type: "text" },
-                description: { type: "text" },
-                published_year: { type: "integer" }
-              }
-            }
-          }
-        )
+      if search_client.indices.exists_alias?(name: books_index)
+        @books_index_ready = true
+        return
       end
+
+      new_index = "#{books_index}-#{Time.now.to_i}"
+      search_client.indices.create(index: new_index, body: books_index_template)
+
+      # If an index with the alias name already exists (old behavior), remove it to allow alias creation.
+      if search_client.indices.exists?(index: books_index)
+        search_client.indices.delete(index: books_index)
+      end
+
+      search_client.indices.update_aliases(
+        body: {
+          actions: [
+            { add: { index: new_index, alias: books_index, is_write_index: true } }
+          ]
+        }
+      )
 
       @books_index_ready = true
     end
@@ -52,6 +70,54 @@ class App < Sinatra::Base
 
       Services::Database.ensure_books_table!
       @books_table_ready = true
+    end
+
+    def rebuild_books_index!
+      ensure_books_table!
+      batch_size = ENV.fetch("BOOKS_REINDEX_BATCH", 1000).to_i
+      new_index = "#{books_index}-#{Time.now.to_i}"
+
+      search_client.indices.create(index: new_index, body: books_index_template)
+
+      last_id = 0
+      loop do
+        batch = db[:books].where(Sequel[:id] > last_id).order(:id).limit(batch_size).all
+        break if batch.empty?
+
+        bulk_body = batch.flat_map do |row|
+          [
+            { index: { _index: new_index, _id: row[:id] } },
+            {
+              title: row[:title],
+              author: row[:author],
+              description: row[:description],
+              published_year: row[:published_year]
+            }
+          ]
+        end
+
+        search_client.bulk(body: bulk_body) if bulk_body.any?
+        last_id = batch.last[:id]
+      end
+
+      search_client.indices.refresh(index: new_index)
+
+      current_indices = []
+      begin
+        alias_info = search_client.indices.get_alias(name: books_index)
+        current_indices = alias_info.keys
+      rescue StandardError
+        current_indices = []
+      end
+
+      actions = current_indices.map { |idx| { remove: { index: idx, alias: books_index } } }
+      actions << { add: { index: new_index, alias: books_index, is_write_index: true } }
+      search_client.indices.update_aliases(body: { actions: actions })
+
+      obsolete = current_indices - [new_index]
+      search_client.indices.delete(index: obsolete) if obsolete.any?
+
+      new_index
     end
   end
 
@@ -123,7 +189,7 @@ class App < Sinatra::Base
 
         hits = search_response.fetch("hits", {}).fetch("hits", [])
         ids = hits.map { |h| h["_id"].to_i }.uniq
-        db_records = db[:books].where(id: ids).all.inject({}) { |acc, r| acc[r[:id]] = r; acc }
+        db_records = db[:books].where(id: ids).all.each_with_object({}) { |r, memo| memo[r[:id]] = r }
 
         results = hits.filter_map do |hit|
           id = hit["_id"].to_i
@@ -206,7 +272,7 @@ class App < Sinatra::Base
 
       hits = response.fetch("hits", {}).fetch("hits", [])
       ids = hits.map { |h| h["_id"].to_i }.uniq
-      db_records = db[:books].where(id: ids).all.index_by { |r| r[:id] }
+      db_records = db[:books].where(id: ids).all.each_with_object({}) { |r, memo| memo[r[:id]] = r }
 
       results = hits.filter_map do |hit|
         id = hit["_id"].to_i
@@ -220,6 +286,18 @@ class App < Sinatra::Base
     rescue StandardError => e
       status 500
       { error: e.message }.to_json
+    end
+  end
+
+  post "/api/books/reset" do
+    content_type :json
+
+    begin
+      new_index = rebuild_books_index!
+      { result: "reindexed", index: new_index }.to_json
+    rescue StandardError => e
+      status 500
+      { error: "reindex failed: #{e.message}" }.to_json
     end
   end
 end

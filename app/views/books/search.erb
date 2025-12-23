@@ -1,6 +1,13 @@
 <div class="card">
   <h2>書籍検索 (OpenSearch)</h2>
 
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+    <form action="/api/books/reset" method="post" onsubmit="return confirm('OpenSearchインデックスを再構築します。よろしいですか？');">
+      <button type="submit" style="background:#f97316;">OpenSearchリセット</button>
+    </form>
+    <span class="muted">MySQL のデータを再インデックスします（無停止スワップ）。</span>
+  </div>
+
   <% if error %>
     <div class="error"><%= error %></div>
   <% end %>

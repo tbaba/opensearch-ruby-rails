@@ -14,6 +14,14 @@ docker-compose up --build
 - `rerun` + ボリュームマウントで `app/` や `config/` の変更が即反映されます。
 - OpenSearch も同時に起動します（`public.ecr.aws/opensearchproject/opensearch:1.3.20`）。`http://localhost:9200` で確認できます。
 
+## 書籍登録/検索の使い方
+- UI
+  - 登録: `http://localhost:4567/books/new`
+  - 検索: `http://localhost:4567/books/search`
+- API
+  - 登録: `POST http://localhost:4567/api/books`（JSON で `title`, `author` 必須）
+  - 検索: `GET  http://localhost:4567/api/books/search?q=キーワード`
+
 ## OpenSearch 連携の下準備
 - `app/services/search_client.rb` に接続用クライアントを用意しています（`OPENSEARCH_URL` を利用）。次のステップで実際の API 呼び出しを実装してください。
 - デフォルトの環境変数は `docker-compose.yml` の `OPENSEARCH_URL=http://opensearch:9200`。必要に応じて上書きしてください。

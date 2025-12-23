@@ -1,0 +1,49 @@
+<div class="card">
+  <h2>書籍検索 (OpenSearch)</h2>
+
+  <% if error %>
+    <div class="error"><%= error %></div>
+  <% end %>
+
+  <form action="/books/search" method="get">
+    <div class="field">
+      <label for="q">キーワード</label>
+      <input type="text" id="q" name="q" value="<%= query %>" placeholder="タイトル・著者・概要で検索" />
+    </div>
+    <div class="actions">
+      <button type="submit">検索</button>
+    </div>
+  </form>
+
+  <% if query && !query.empty? %>
+    <h3>検索結果 (<%= results.size %> 件)</h3>
+    <% if results.empty? %>
+      <p>該当なし</p>
+    <% else %>
+      <table>
+        <thead>
+          <tr>
+            <th>タイトル</th>
+            <th>著者</th>
+            <th>出版年</th>
+            <th>概要</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% results.each do |r| %>
+            <tr>
+              <td><%= r[:title] %></td>
+              <td><%= r[:author] %></td>
+              <td><%= r[:published_year] %></td>
+              <td><%= r[:description] %></td>
+              <td class="muted"><%= r[:score] %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  <% end %>
+
+  <p class="muted">JSON API: GET /api/books/search?q=キーワード</p>
+</div>

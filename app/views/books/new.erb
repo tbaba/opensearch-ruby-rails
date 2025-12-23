@@ -1,0 +1,39 @@
+<div class="card">
+  <h2>書籍登録 (OpenSearch)</h2>
+
+  <% if notice %>
+    <div class="notice"><%= notice %></div>
+  <% end %>
+
+  <% if error %>
+    <div class="error"><%= error %></div>
+  <% end %>
+
+  <form action="/books" method="post">
+    <div class="field">
+      <label for="title">タイトル *</label>
+      <input type="text" id="title" name="title" placeholder="例: Effective Ruby" required />
+    </div>
+
+    <div class="field">
+      <label for="author">著者 *</label>
+      <input type="text" id="author" name="author" placeholder="例: Peter J. Jones" required />
+    </div>
+
+    <div class="field">
+      <label for="published_year">出版年</label>
+      <input type="text" id="published_year" name="published_year" placeholder="例: 2015" />
+    </div>
+
+    <div class="field">
+      <label for="description">概要</label>
+      <textarea id="description" name="description" placeholder="簡単な説明を入力してください"></textarea>
+    </div>
+
+    <div class="actions">
+      <button type="submit">OpenSearch に登録</button>
+    </div>
+  </form>
+
+  <p class="muted">JSON API: POST /api/books （title, author は必須）</p>
+</div>

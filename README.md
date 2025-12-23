@@ -12,6 +12,7 @@ docker-compose up --build
 - ブラウザで `http://localhost:4567/` を確認できます。
 - ヘルスチェックは `http://localhost:4567/health`。`OPENSEARCH_URL` がレスポンスに含まれます。
 - `rerun` + ボリュームマウントで `app/` や `config/` の変更が即反映されます。
+- OpenSearch も同時に起動します（`public.ecr.aws/opensearchproject/opensearch:1.3.20`）。`http://localhost:9200` で確認できます。
 
 ## OpenSearch 連携の下準備
 - `app/services/search_client.rb` に接続用クライアントを用意しています（`OPENSEARCH_URL` を利用）。次のステップで実際の API 呼び出しを実装してください。
@@ -23,3 +24,4 @@ docker-compose up --build
 - `config/puma.rb` … Rack サーバー設定（Puma）。
 - `config.ru` … Rack エントリーポイント。
 - `Dockerfile` / `docker-compose.yml` … 開発用コンテナ定義（ホットリロード対応）。`bundle` ボリュームは使わず、イメージビルド時の Bundler キャッシュを利用します。
+- `docker-compose.yml` の `opensearch` サービス … 開発用 OpenSearch 1.3.20（セキュリティ無効、データは `opensearch-data` ボリュームに永続化）。

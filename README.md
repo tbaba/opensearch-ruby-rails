@@ -34,7 +34,8 @@ docker-compose up --build
 
 ## 主要ファイル
 - `app/app.rb` … Sinatra アプリ本体。
-- `app/services/search_client.rb` … OpenSearch クライアント生成用のプレースホルダー。
+- `app/models/book.rb` … Book モデル（Sequel）。テーブル/インデックス生成・リセットをクラスメソッドで提供。
+- `app/services/search_client.rb` … OpenSearch クライアント生成用。
 - `app/services/database.rb` … MySQL 接続と `books` テーブル自動作成。
 - `config/puma.rb` … Rack サーバー設定（Puma）。
 - `config.ru` … Rack エントリーポイント。
